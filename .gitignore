@@ -1,0 +1,14 @@
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore node modules if you add npm packages later
+node_modules/
+
+# Ignore environment/secret files if added later
+.env
+firebaseConfig.js
+
+# Ignore build output if using a bundler later
+dist/
+build/
