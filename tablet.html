@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#00ffe1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <title>Fleet Tracker - Tablet</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      background: linear-gradient(to top, #000000, #0a0a23, #1a1a40);
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      text-align: center;
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #logo {
+      width: 150px;
+      margin: 30px auto 10px auto;
+      display: block;
+      filter: drop-shadow(0px 0px 50px #00ffe1) brightness(20) saturate(3);
+      opacity: 1;
+      animation: floatLogo 3s ease-in-out infinite;
+    }
+
+    @keyframes floatLogo {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    h1 {
+      font-size: 2.8em;
+      margin-bottom: 20px;
+      color: #00ffe1;
+      text-shadow: 0 0 10px #00ffe1, 0 0 20px #00ffe1;
+      animation: pulseTitle 2s infinite alternate;
+    }
+
+    @keyframes pulseTitle {
+      0% { text-shadow: 0 0 10px #00ffe1, 0 0 20px #00ffe1; }
+      100% { text-shadow: 0 0 20px #00ffe1, 0 0 30px #00ffe1; }
+    }
+
+    select, button {
+      margin-top: 10px;
+      font-size: 20px;
+      padding: 12px;
+      background: #111;
+      border: 2px solid #00ffe1;
+      color: white;
+      border-radius: 10px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.3s, box-shadow 0.3s;
+      box-shadow: 0 0 10px #00ffe1;
+    }
+
+    select:hover, button:hover {
+      background: #00ffe1;
+      color: black;
+      transform: scale(1.1);
+      box-shadow: 0 0 20px #00ffe1, 0 0 30px #00ffe1;
+    }
+
+    #startButton {
+      background: #00ffe1;
+      color: black;
+      margin-right: 10px;
+      box-shadow: 0 0 15px #00ffe1, 0 0 25px #00ffe1;
+    }
+
+    #stopButton {
+      background: #ff4c4c;
+      color: white;
+      box-shadow: 0 0 15px #ff4c4c, 0 0 25px #ff4c4c;
+    }
+
+    #status {
+      margin-top: 20px;
+      color: #00ffe1;
+      font-size: 1.7em;
+      text-shadow: 0 0 10px #00ffe1, 0 0 20px #00ffe1;
+    }
+    
+    #installButton {
+      display: none;
+      background: #5b42f3;
+      color: white;
+      margin-top: 20px;
+      box-shadow: 0 0 15px #5b42f3, 0 0 25px #5b42f3;
+    }
+    
+    #coordinates {
+      margin-top: 20px;
+      color: #ffffff;
+      font-size: 1.2em;
+    }
+  </style>
+</head>
+<body>
+  <h1>Fleet Tracker - Tablet</h1>
+  <select id="busSelect">
+    <option value="">Select Bus</option>
+    <option value="Lúxusinn - AYX70">Lúxusinn - AYX70</option>
+    <option value="Afi Stjáni - MAF43">Afi Stjáni - MAF43</option>
+    <option value="Meistarinn - TZE50">Meistarinn - TZE50</option>
+  </select>
+  <br>
+  <button id="startButton">Start Tracking</button>
+  <button id="stopButton">Stop Tracking</button>
+  <p id="status">Not tracking.</p>
+  <p id="coordinates">No location data</p>
+  <button id="installButton">Install App</button>
+  <img id="logo" src="Black.svg" alt="Aurora Viking Logo">
+
+  <script>
+    let deferredPrompt;
+    let refreshing = false;
+    
+    // Check if service worker is supported
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(registration => {
+            console.log('Service Worker registered with scope:', registration.scope);
+            
+            // Detect controller change and refresh the page
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+              if (!refreshing) {
+                refreshing = true;
+                window.location.reload();
+              }
+            });
+            
+            // Check for updates on load
+            registration.update();
+          })
+          .catch(error => {
+            console.error('Service Worker registration failed:', error);
+            document.getElementById('status').innerText = 'Service Worker failed to register. App may not work offline.';
+          });
+      });
+    } else {
+      document.getElementById('status').innerText = 'Service Worker not supported. App may not work offline.';
+    }
+
+    // Handle installation prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Prevent Chrome 67 and earlier from automatically showing the prompt
+      e.preventDefault();
+      // Stash the event so it can be triggered later
+      deferredPrompt = e;
+      
+      // Update UI to notify the user they can add to home screen
+      document.getElementById('installButton').style.display = 'block';
+    });
+
+    // When "Install" button is clicked
+    document.getElementById('installButton').addEventListener('click', (e) => {
+      // Show the prompt
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        // Wait for the user to respond to the prompt
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            console.log('User accepted the installation prompt');
+            document.getElementById('status').innerText = 'App installed successfully!';
+          } else {
+            console.log('User dismissed the installation prompt');
+          }
+          deferredPrompt = null;
+          document.getElementById('installButton').style.display = 'none';
+        });
+      }
+    });
+  </script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDQbeO6bpwrOZvaeNxqUeJIXR560aitg1Y",
+      authDomain: "fleettracker-432a3.firebaseapp.com",
+      projectId: "fleettracker-432a3",
+      storageBucket: "fleettracker-432a3.appspot.com",
+      messagingSenderId: "483527051817",
+      appId: "1:483527051817:web:704be85d1cad45d71eea38"
+    };
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const database = getDatabase(app);
+
+      let watchId = null;
+      let lastSentTime = 0;
+      const coordsElement = document.getElementById('coordinates');
+
+      document.getElementById('startButton').addEventListener('click', () => {
+        const busName = document.getElementById('busSelect').value;
+        if (!busName) {
+          alert('Please select your bus.');
+          return;
+        }
+        
+        document.getElementById('status').innerText = 'Requesting location...';
+        
+        if (navigator.geolocation) {
+          watchId = navigator.geolocation.watchPosition(position => {
+            const now = Date.now();
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            
+            coordsElement.innerText = `Lat: ${lat.toFixed(6)}, Lon: ${lon.toFixed(6)}`;
+            
+            if (now - lastSentTime >= 10000) { // Only send every 10 seconds
+              set(ref(database, 'buses/' + busName), {
+                latitude: lat,
+                longitude: lon,
+                timestamp: now
+              }).then(() => {
+                document.getElementById('status').innerText = `Tracking: ${busName}`;
+                lastSentTime = now;
+              }).catch(error => {
+                document.getElementById('status').innerText = `Error: ${error.message}`;
+              });
+            }
+          }, error => {
+            let errorMsg = 'Unknown error';
+            switch(error.code) {
+              case error.PERMISSION_DENIED:
+                errorMsg = 'Location permission denied';
+                break;
+              case error.POSITION_UNAVAILABLE:
+                errorMsg = 'Location unavailable';
+                break;
+              case error.TIMEOUT:
+                errorMsg = 'Location request timed out';
+                break;
+            }
+            document.getElementById('status').innerText = `Error: ${errorMsg}`;
+            alert('Error getting location: ' + errorMsg);
+          }, {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 10000
+          });
+        } else {
+          document.getElementById('status').innerText = 'Geolocation not supported';
+          alert('Geolocation is not supported by this device.');
+        }
+      });
+
+      document.getElementById('stopButton').addEventListener('click', () => {
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+          document.getElementById('status').innerText = 'Tracking stopped.';
+          coordsElement.innerText = 'No location data';
+        }
+      });
+    } catch (error) {
+      console.error("Firebase initialization error:", error);
+      document.getElementById('status').innerText = `Firebase error: ${error.message}`;
+    }
+  </script>
+</body>
+</html>
